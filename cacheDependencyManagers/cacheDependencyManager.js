@@ -50,47 +50,70 @@ CacheDependencyManager.prototype.installDependencies = function () {
 };
 
 
-CacheDependencyManager.prototype.archiveDependencies = function (cacheDirectory, cachePath, callback) {
-  var error = null;
+CacheDependencyManager.prototype.archiveDependencies = function (cacheDirectory, cachePath, hash, callback) {
   var installedDirectory = getAbsolutePath(this.config.installDirectory);
   this.cacheLogInfo('archiving dependencies from ' + installedDirectory);
+  fs.writeFile(path.resolve(installedDirectory, 'hash.txt'), hash, function (err) {
+    if (err) callback(err);
 
-  // Make sure cache directory is created
-  shell.mkdir('-p', cacheDirectory);
+    // Make sure cache directory is created
+    shell.mkdir('-p', cacheDirectory);
 
-  // Now archive installed directory
-  
-  tar.pack(installedDirectory + '/')
-    .pipe(zlib.createGzip())
-    .pipe(fs.createWriteStream(cachePath, {
-    'defaultEncoding': 'binary'
-  })).on('finish', function() {
-    console.log("Done!");
-    callback(error);
+    // Now archive installed directory
+    
+    tar.pack(installedDirectory + '/')
+      .pipe(zlib.createGzip())
+      .pipe(fs.createWriteStream(cachePath, {
+      'defaultEncoding': 'binary'
+    })).on('finish', function() {
+      console.log("Done!");
+      callback();
+    });
   });
 };
 
-CacheDependencyManager.prototype.extractDependencies = function (cachePath, callback) {
-  var error = null;
-  var installedDirectory = getAbsolutePath(this.config.installDirectory);
-  this.cacheLogInfo('clearing installed dependencies at ' + installedDirectory);
-  rimraf.sync(installedDirectory);
+var hashFileIsUpToDate = function (file, hash, callback) {
+  fs.readFile(file, function (err, data) {
+    if (err) return callback(err);
 
-  this.cacheLogInfo('...cleared');
+    if (hash !== data) return callback(undefined, false);
 
-  // Make sure install directory is created
-  shell.mkdir('-p', installedDirectory);
+    return callback(undefined, true);
+  });
+};
 
-  this.cacheLogInfo('extracting dependencies from ' + cachePath);
+CacheDependencyManager.prototype.extractDependencies = function (cachePath, hash, callback) {
+  var self = this;
+  var installedDirectory = getAbsolutePath(self.config.installDirectory);
+  var hashFile = path.resolve(installedDirectory, "hash.txt");
+  hashFileIsUpToDate(hashFile, hash, function (err, isUpToDate) {
+    if (!isUpToDate) {
+      self.cacheLogInfo('clearing installed dependencies at ' + installedDirectory);
+      rimraf(installedDirectory, function (err) {
+        if (err) return callback(err);
+        self.cacheLogInfo('...cleared');
 
-  fs.createReadStream(cachePath, {
-    'defaultEncoding': 'binary'
-  }).pipe(gunzip())
-    .pipe(tar.extract(installedDirectory))
-    .on('finish', function() {
-      console.log("Done!");
-      callback(error);
-    });
+        // Make sure install directory is created
+        shell.mkdir('-p', installedDirectory);
+
+        self.cacheLogInfo('extracting dependencies from ' + cachePath);
+
+        fs.createReadStream(cachePath, {
+          'defaultEncoding': 'binary'
+        }).pipe(gunzip())
+          .pipe(tar.extract(installedDirectory))
+          .on('finish', function() {
+            console.log("Done!");
+            callback();
+          });
+      });
+      return;
+    } else {
+      self.cacheLogInfo('dependencies at \'' + installedDirectory + '\' are up to date');
+      callback();
+      return;
+    }
+  });
 };
 
 
@@ -128,7 +151,7 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
     this.cacheLogInfo('cache exists');
 
     // Try to extract dependencies
-    error = this.extractDependencies(cachePath, function(err) {
+    error = this.extractDependencies(cachePath, hash, function(err) {
       if (!err) {
         // Success!
         self.cacheLogInfo('extracted cached dependencies');
@@ -146,7 +169,7 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
     }
 
     // Try to archive newly installed dependencies
-    this.archiveDependencies(cacheDirectory, cachePath, function(err) {
+    this.archiveDependencies(cacheDirectory, cachePath, hash, function(err) {
       if (!err) {
         // Success!
         self.cacheLogInfo('installed and archived dependencies');
