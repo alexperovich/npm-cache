@@ -76,7 +76,9 @@ var hashFileIsUpToDate = function (file, hash, callback) {
   fs.readFile(file, function (err, data) {
     if (err) return callback(err);
 
-    if (hash !== data) return callback(undefined, false);
+    if (hash.toString() !== data.toString()) {
+      return callback(undefined, false);
+    }
 
     return callback(undefined, true);
   });
