@@ -5,6 +5,10 @@ var path = require('path');
 var logger = require('../util/logger');
 var md5 = require('MD5');
 var shell = require('shelljs');
+var tar = require('tar-fs');
+var gunzip = require('gunzip-maybe');
+var zlib = require('zlib');
+var rimraf = require('rimraf');
 
 
 function CacheDependencyManager (config) {
@@ -46,7 +50,7 @@ CacheDependencyManager.prototype.installDependencies = function () {
 };
 
 
-CacheDependencyManager.prototype.archiveDependencies = function (cacheDirectory, cachePath) {
+CacheDependencyManager.prototype.archiveDependencies = function (cacheDirectory, cachePath, callback) {
   var error = null;
   var installedDirectory = getAbsolutePath(this.config.installDirectory);
   this.cacheLogInfo('archiving dependencies from ' + installedDirectory);
@@ -55,40 +59,38 @@ CacheDependencyManager.prototype.archiveDependencies = function (cacheDirectory,
   shell.mkdir('-p', cacheDirectory);
 
   // Now archive installed directory
-  if (shell.exec('tar -zcf ' + cachePath + ' -C ' + installedDirectory + ' .').code !== 0) {
-    error = 'error tar-ing ' + installedDirectory;
-    this.cacheLogError(error);
-    shell.rm(cachePath);
-  } else {
-    this.cacheLogInfo('done archiving');
-  }
-  return error;
+  
+  tar.pack(installedDirectory + '/')
+    .pipe(zlib.createGzip())
+    .pipe(fs.createWriteStream(cachePath, {
+    'defaultEncoding': 'binary'
+  })).on('finish', function() {
+    console.log("Done!");
+    callback(error);
+  });
 };
 
-CacheDependencyManager.prototype.extractDependencies = function (cachePath) {
+CacheDependencyManager.prototype.extractDependencies = function (cachePath, callback) {
   var error = null;
   var installedDirectory = getAbsolutePath(this.config.installDirectory);
   this.cacheLogInfo('clearing installed dependencies at ' + installedDirectory);
-  var removeExitCode = shell.exec('rm -rf ' + installedDirectory).code;
-  if (removeExitCode !== 0) {
-    error = 'error removing installed dependencies at ' + installedDirectory;
-    this.cacheLogError(error);
-  } else {
-    this.cacheLogInfo('...cleared');
+  rimraf.sync(installedDirectory);
 
-    // Make sure install directory is created
-    shell.mkdir('-p', installedDirectory);
+  this.cacheLogInfo('...cleared');
 
-    this.cacheLogInfo('extracting dependencies from ' + cachePath);
-    var tarExtractCode = shell.exec('tar -zxf ' + cachePath + ' -C ' + installedDirectory).code;
-    if (tarExtractCode !== 0) {
-      error = 'error untar-ing ' + cachePath;
-      this.cacheLogError(error);
-    } else {
-      this.cacheLogInfo('done extracting');
-    }
-  }
-  return error;
+  // Make sure install directory is created
+  shell.mkdir('-p', installedDirectory);
+
+  this.cacheLogInfo('extracting dependencies from ' + cachePath);
+
+  fs.createReadStream(cachePath, {
+    'defaultEncoding': 'binary'
+  }).pipe(gunzip())
+    .pipe(tar.extract(installedDirectory))
+    .on('finish', function() {
+      console.log("Done!");
+      callback(error);
+    });
 };
 
 
@@ -126,12 +128,13 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
     this.cacheLogInfo('cache exists');
 
     // Try to extract dependencies
-    error = this.extractDependencies(cachePath);
-    if (error !== null) {
-      callback(error);
-      return;
-    }
-    // Success!
+    error = this.extractDependencies(cachePath, function(err) {
+      if (!err) {
+        // Success!
+        self.cacheLogInfo('extracted cached dependencies');
+      }
+      callback(err);
+    });
 
   } else { // install dependencies with CLI tool and cache
 
@@ -143,17 +146,14 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
     }
 
     // Try to archive newly installed dependencies
-    error = this.archiveDependencies(cacheDirectory, cachePath);
-    if (error !== null) {
-      callback(error);
-      return;
-    }
-
-    // Success!
-    self.cacheLogInfo('installed and archived dependencies');
+    this.archiveDependencies(cacheDirectory, cachePath, function(err) {
+      if (!err) {
+        // Success!
+        self.cacheLogInfo('installed and archived dependencies');
+      }
+      callback(err);
+    });
   }
-
-  callback(error);
 };
 
 /**
