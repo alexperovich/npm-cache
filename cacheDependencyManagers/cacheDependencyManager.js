@@ -126,36 +126,36 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
   var error = null;
 
   // Check if config file for dependency manager exists
-  if (! fs.existsSync(this.config.configPath)) {
-    this.cacheLogInfo('Dependency config file ' + this.config.configPath + ' does not exist. Skipping install');
+  if (! fs.existsSync(self.config.configPath)) {
+    self.cacheLogInfo('Dependency config file ' + self.config.configPath + ' does not exist. Skipping install');
     callback(null);
     return;
   }
-  this.cacheLogInfo('config file exists');
+  self.cacheLogInfo('config file exists');
 
   // Check if package manger CLI is installed
-  if (! shell.which(this.config.cliName)) {
-    error = 'Command line tool ' + this.config.cliName + ' not installed';
-    this.cacheLogError(error);
+  if (! shell.which(self.config.cliName)) {
+    error = 'Command line tool ' + self.config.cliName + ' not installed';
+    self.cacheLogError(error);
     callback(error);
     return;
   }
-  this.cacheLogInfo('cli exists');
+  self.cacheLogInfo('cli exists');
 
 
   // Get hash of dependency config file
-  var hash = getFileHash(this.config.configPath);
-  this.cacheLogInfo('hash of ' + this.config.configPath + ': ' + hash);
+  var hash = getFileHash(self.config.configPath);
+  self.cacheLogInfo('hash of ' + self.config.configPath + ': ' + hash);
   // cachePath is absolute path to where local cache of dependencies is located
-  var cacheDirectory = path.resolve(this.config.cacheDirectory, this.config.cliName, this.config.getCliVersion());
+  var cacheDirectory = path.resolve(self.config.cacheDirectory, self.config.cliName, self.config.getCliVersion());
   var cachePath = path.resolve(cacheDirectory, hash + '.tar.gz');
 
   // Check if local cache of dependencies exists
-  if (! this.config.forceRefresh && fs.existsSync(cachePath)) {
-    this.cacheLogInfo('cache exists');
+  if (! self.config.forceRefresh && fs.existsSync(cachePath)) {
+    self.cacheLogInfo('cache exists');
 
     // Try to extract dependencies
-    error = this.extractDependencies(cachePath, hash, function(err) {
+    error = self.extractDependencies(cachePath, hash, function(err) {
       if (!err) {
         // Success!
         self.cacheLogInfo('extracted cached dependencies');
@@ -166,10 +166,10 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
   } else { // install dependencies with CLI tool and cache
 
     // Try to install dependencies using package manager
-    return this.installDependencies(function (err, res) {
+    return self.installDependencies(function (err, res) {
       if (err) return callback(err);
       // Try to archive newly installed dependencies
-      this.archiveDependencies(cacheDirectory, cachePath, hash, function(err) {
+      self.archiveDependencies(cacheDirectory, cachePath, hash, function(err) {
         if (!err) {
           // Success!
           self.cacheLogInfo('installed and archived dependencies');
