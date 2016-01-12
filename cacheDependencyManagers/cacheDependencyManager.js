@@ -35,18 +35,20 @@ CacheDependencyManager.prototype.cacheLogError = function (error) {
 };
 
 
-CacheDependencyManager.prototype.installDependencies = function () {
-  var error = null;
+CacheDependencyManager.prototype.installDependencies = function (callback) {
   var installCommand = this.config.installCommand + ' ' + this.config.installOptions;
   installCommand = installCommand.trim();
   this.cacheLogInfo('running [' + installCommand + ']...');
   if (shell.exec(installCommand).code !== 0) {
-    error = 'error running ' + this.config.installCommand;
     this.cacheLogError(error);
+    return callback('error running ' + this.config.installCommand);
   } else {
     this.cacheLogInfo('installed ' + this.config.cliName + ' dependencies, now archiving');
   }
-  return error;
+  if (this.config.postInstall && typeof this.config.postInstall === 'function') {
+    return this.config.postInstall(callback);
+  }
+  return callback();
 };
 
 
@@ -164,19 +166,16 @@ CacheDependencyManager.prototype.loadDependencies = function (callback) {
   } else { // install dependencies with CLI tool and cache
 
     // Try to install dependencies using package manager
-    error = this.installDependencies();
-    if (error !== null) {
-      callback(error);
-      return;
-    }
-
-    // Try to archive newly installed dependencies
-    this.archiveDependencies(cacheDirectory, cachePath, hash, function(err) {
-      if (!err) {
-        // Success!
-        self.cacheLogInfo('installed and archived dependencies');
-      }
-      callback(err);
+    return this.installDependencies(function (err, res) {
+      if (err) return callback(err);
+      // Try to archive newly installed dependencies
+      this.archiveDependencies(cacheDirectory, cachePath, hash, function(err) {
+        if (!err) {
+          // Success!
+          self.cacheLogInfo('installed and archived dependencies');
+        }
+        callback(err);
+      });
     });
   }
 };

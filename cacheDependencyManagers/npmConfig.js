@@ -4,6 +4,7 @@ var path = require('path');
 var shell = require('shelljs');
 var fs = require('fs');
 var logger = require('../util/logger');
+var fp = require('flatten-packages');
 
 
 // Returns path to configuration file for npm. Uses
@@ -28,5 +29,10 @@ module.exports = {
   },
   configPath: getNpmConfigPath(),
   installDirectory: 'node_modules',
-  installCommand: 'npm install'
+  installCommand: 'npm install',
+  postInstall: function (done) {
+    fp('.', { info: false }, function (err, res) {
+      done(err, res);
+    });
+  }
 };

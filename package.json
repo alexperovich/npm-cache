@@ -24,13 +24,14 @@
   "dependencies": {
     "MD5": "1.2.1",
     "async": "0.9.0",
+    "flatten-packages": "^0.1.4",
     "glob": "5.0.10",
+    "gunzip-maybe": "1.2.1",
     "lodash": "3.5.0",
     "nomnom": "1.8.1",
+    "rimraf": "2.4.3",
     "shelljs": "0.5.1",
-    "tar-fs": "1.8.1",
-    "gunzip-maybe": "1.2.1",
-    "rimraf": "2.4.3"
+    "tar-fs": "1.8.1"
   },
   "preferGlobal": true,
   "bin": {
