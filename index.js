@@ -100,7 +100,7 @@ var installDependencies = function (opts) {
         logger.logInfo('successfully installed all dependencies');
         process.exit(0);
       } else {
-        logger.logError('error installing dependencies');
+        logger.logError('error installing dependencies: \'' + error + '\'');
         process.exit(1);
       }
     }
